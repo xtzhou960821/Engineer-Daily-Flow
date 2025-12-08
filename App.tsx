@@ -86,7 +86,7 @@ const App: React.FC = () => {
               <Sun className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-slate-900 text-sm sm:text-base leading-tight">工程师的一天</h1>
+              <h1 className="font-bold text-slate-900 text-sm sm:text-base leading-tight">桥梁工程师的一天</h1>
               <p className="text-xs text-slate-500 font-mono">{currentDate}</p>
             </div>
           </div>
