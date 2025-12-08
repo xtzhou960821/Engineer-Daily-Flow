@@ -4,6 +4,7 @@ import { ScheduleBlock } from './types';
 import ScheduleCard from './components/ScheduleCard';
 import TopPriorities from './components/TopPriorities';
 import DailyAnalysis from './components/DailyAnalysis';
+import ChatBot from './components/ChatBot';
 import { CalendarDays, Sun, RotateCcw } from 'lucide-react';
 
 const SCHEDULE_STORAGE_KEY = 'engineer-daily-schedule-v1';
@@ -154,6 +155,9 @@ const App: React.FC = () => {
         </footer>
 
       </main>
+
+      {/* AI Chat Bot */}
+      <ChatBot />
     </div>
   );
 };
