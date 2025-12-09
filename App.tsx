@@ -1,22 +1,26 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { INITIAL_SCHEDULE, INITIAL_PRIORITIES } from './constants';
-import { ScheduleBlock, Priority, HistoryData, DailyData } from './types';
+import { ScheduleBlock, Priority, HistoryData, DailyData, ActivityType } from './types';
 import ScheduleCard from './components/ScheduleCard';
 import TopPriorities from './components/TopPriorities';
 import DailyAnalysis from './components/DailyAnalysis';
 import ChatBot from './components/ChatBot';
-import { CalendarDays, Sun, RotateCcw, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { CalendarDays, Sun, RotateCcw, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Plus } from 'lucide-react';
 
 const HISTORY_STORAGE_KEY = 'engineer-daily-history-v1';
 
 // Helper to get YYYY-MM-DD string
+// Local timezone safe approach
 const getFormattedDate = (date: Date): string => {
-  return date.toISOString().split('T')[0];
+  const offset = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+  return localDate.toISOString().split('T')[0];
 };
 
 const App: React.FC = () => {
   // --- Date State ---
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const dateInputRef = useRef<HTMLInputElement>(null);
   
   // --- Data State ---
   // We load the entire history object.
@@ -27,10 +31,6 @@ const App: React.FC = () => {
       if (saved) {
         return JSON.parse(saved);
       }
-      
-      // Migration Strategy: If no history, try to see if we have old flat data
-      // and save it as "Today" (or just start fresh to be safe/clean).
-      // Let's start clean but maybe default today to initial if empty.
       return {};
     } catch (e) {
       console.error("Failed to load history", e);
@@ -102,6 +102,24 @@ const App: React.FC = () => {
     updateSchedule(newSchedule);
   };
 
+  const handleDeleteBlock = (blockId: string) => {
+    const newSchedule = currentData.schedule.filter(block => block.id !== blockId);
+    updateSchedule(newSchedule);
+  };
+
+  const handleAddBlock = () => {
+    const newBlock: ScheduleBlock = {
+      id: `new-${Date.now()}`,
+      timeRange: '00:00 - 01:00',
+      title: '新任务',
+      type: ActivityType.DEEP_WORK,
+      description: '请输入任务描述...',
+      subTasks: []
+    };
+    // Add to the end
+    updateSchedule([...currentData.schedule, newBlock]);
+  };
+
   const handleReset = () => {
     if (confirm(`确定要重置 [${dateKey}] 的所有日程为默认模板吗？`)) {
       updateHistory(INITIAL_SCHEDULE, INITIAL_PRIORITIES);
@@ -116,6 +134,19 @@ const App: React.FC = () => {
 
   const goToToday = () => {
     setSelectedDate(new Date());
+  };
+
+  const handleDateClick = () => {
+    if (dateInputRef.current) {
+      // Small timeout to ensure UI is ready if needed, mostly for mobile touch feedback
+      setTimeout(() => dateInputRef.current?.showPicker(), 50);
+    }
+  };
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.value) {
+      setSelectedDate(new Date(e.target.value));
+    }
   };
 
   // --- Progress Calculation ---
@@ -152,7 +183,11 @@ const App: React.FC = () => {
           
           {/* Left: Date Navigation */}
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg transition-colors ${isToday ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+            <div 
+              onClick={goToToday}
+              className={`p-2 rounded-lg transition-colors cursor-pointer ${isToday ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+              title="回到今天"
+            >
               <Sun className="w-5 h-5" />
             </div>
             
@@ -162,9 +197,20 @@ const App: React.FC = () => {
                    <ChevronLeft className="w-4 h-4" />
                  </button>
                  
-                 <h1 className="font-bold text-slate-900 text-sm sm:text-base leading-tight select-none cursor-pointer" onClick={goToToday}>
-                   {isToday ? '今天' : dateKey}
-                 </h1>
+                 <div className="relative group cursor-pointer" onClick={handleDateClick}>
+                   <h1 className="font-bold text-slate-900 text-sm sm:text-base leading-tight select-none group-hover:text-indigo-600 transition-colors flex items-center gap-1">
+                     {isToday ? '今天' : dateKey}
+                     <CalendarIcon className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" />
+                   </h1>
+                   {/* Hidden Date Input for Native Picker */}
+                   <input 
+                      ref={dateInputRef}
+                      type="date" 
+                      className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer -z-10"
+                      value={dateKey}
+                      onChange={handleDateChange}
+                   />
+                 </div>
 
                  <button onClick={() => navigateDate(1)} className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-indigo-600 transition-colors">
                    <ChevronRight className="w-4 h-4" />
@@ -199,11 +245,11 @@ const App: React.FC = () => {
         />
 
         {/* Introduction Quote - changes slightly if looking at history */}
-        <div className="bg-orange-50 border-l-4 border-orange-400 p-4 mb-8 rounded-r-lg transition-colors hover:bg-orange-100">
-          <p className="text-orange-800 text-sm italic">
+        <div className={`border-l-4 p-4 mb-8 rounded-r-lg transition-colors ${isToday ? 'bg-orange-50 border-orange-400' : 'bg-slate-100 border-slate-300'}`}>
+          <p className={`${isToday ? 'text-orange-800' : 'text-slate-600'} text-sm italic`}>
             {isToday 
               ? '"5:30 起床不只是为了早起，而是为了掌控生活。今天也要高效完成现场验收和用户模块开发！"'
-              : `正在回顾 ${displayDate} 的日程记录。`
+              : `正在回顾 ${dateKey} (${displayDate}) 的日程记录。`
             }
           </p>
         </div>
@@ -231,18 +277,29 @@ const App: React.FC = () => {
                  isLast={index === currentData.schedule.length - 1}
                  onToggleSubTask={handleToggleSubTask}
                  onUpdateBlock={handleUpdateBlock}
+                 onDeleteBlock={handleDeleteBlock}
                />
              ))}
+           </div>
+           
+           {/* Add New Block Button */}
+           <div className="mt-8 flex justify-center">
+             <button 
+               onClick={handleAddBlock}
+               className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-2 rounded-full border border-indigo-200 hover:bg-indigo-100 transition-colors font-medium text-sm"
+             >
+               <Plus className="w-4 h-4" /> 添加新的时间段
+             </button>
            </div>
         </div>
 
         {/* Analytics - Shows analysis for the SELECTED day */}
-        <DailyAnalysis />
+        <DailyAnalysis schedule={currentData.schedule} />
         
         {/* Footer */}
         <footer className="mt-12 text-center text-slate-400 text-xs pb-6">
           <p>持续行动，每日精进</p>
-          <p className="mt-1 font-mono">Build v1.2.0 (History Enabled)</p>
+          <p className="mt-1 font-mono">Build v1.4.0 (Full Edit)</p>
         </footer>
 
       </main>
