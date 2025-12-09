@@ -29,21 +29,26 @@ const ChatBot: React.FC = () => {
   }, [messages, isOpen]);
 
   // Initialize Chat Session
-  useEffect(() => {
+  const initChat = () => {
     const apiKey = process.env.API_KEY;
+    console.log("Initializing Chat. Key available:", !!apiKey);
     
     // 1. Strict Check for API Key existence and format
     if (!apiKey) {
       const errorMsg = "配置错误: 未检测到 API Key。\n\n请在 Netlify 后台 'Site configuration > Environment variables' 中添加变量 'API_KEY'。\n\n添加后请务必重新部署 (Trigger deploy)。";
       setConfigError(errorMsg);
-      setMessages(prev => [...prev, { id: 'sys-err', role: 'model', text: errorMsg, isError: true }]);
+      if (!messages.some(m => m.id === 'sys-err-key')) {
+          setMessages(prev => [...prev, { id: 'sys-err-key', role: 'model', text: errorMsg, isError: true }]);
+      }
       return;
     }
 
     if (!apiKey.startsWith('AIza')) {
       const errorMsg = "配置错误: API Key 格式看似不正确。\n\nGoogle API Key 通常以 'AIza' 开头。请检查是否复制了多余空格或字符。";
       setConfigError(errorMsg);
-      setMessages(prev => [...prev, { id: 'sys-err', role: 'model', text: errorMsg, isError: true }]);
+      if (!messages.some(m => m.id === 'sys-err-fmt')) {
+          setMessages(prev => [...prev, { id: 'sys-err-fmt', role: 'model', text: errorMsg, isError: true }]);
+      }
       return;
     }
 
@@ -57,12 +62,19 @@ const ChatBot: React.FC = () => {
                     systemInstruction: "You are a helpful assistant for a bridge inspection engineer and software developer. You are concise, professional, and encouraging. Your user has a schedule involving bridge inspection field work and learning software development (API, database). Answer in Chinese."
                 }
             });
-            console.log("Gemini Client Initialized");
-        } catch (error) {
+            console.log("Gemini Client Initialized Successfully");
+            setConfigError(null); // Clear error if init succeeds
+        } catch (error: any) {
             console.error("Failed to initialize AI", error);
-            setConfigError("初始化 AI 客户端失败");
+            const errorText = `初始化失败: ${error.message}`;
+            setConfigError(errorText);
+            setMessages(prev => [...prev, { id: 'init-err', role: 'model', text: errorText, isError: true }]);
         }
     }
+  };
+
+  useEffect(() => {
+    initChat();
   }, []);
 
   const handleSend = async () => {
@@ -77,8 +89,10 @@ const ChatBot: React.FC = () => {
     setIsLoading(true);
 
     try {
+        // Double check session
         if (!chatSessionRef.current) {
-             throw new Error("Chat session not initialized");
+             initChat();
+             if (!chatSessionRef.current) throw new Error("无法创建聊天会话");
         }
         
         // Streaming response
@@ -100,26 +114,28 @@ const ChatBot: React.FC = () => {
             }
         }
     } catch (error: any) {
-        console.error("Chat error", error);
+        console.error("Chat error details:", error);
         
-        let errorMessage = "连接服务器失败，请稍后再试。";
+        let friendlyMessage = "连接服务器失败。";
         const errorStr = error.toString().toLowerCase();
-        
+        const rawMessage = error.message || JSON.stringify(error);
+
         // Detailed Error Handling
         if (errorStr.includes('403') || errorStr.includes('permission')) {
-             errorMessage = "API 权限不足 (403)。\n\n原因 1: 如果使用的是 Google Cloud Key，请务必去 GCP 控制台启用 'Generative Language API' 服务。\n\n原因 2: API Key 填写错误。";
+             friendlyMessage = "API 权限不足 (403)。\n请检查 Google Cloud Console > Credentials > API Key Restrictions (是否限制了 IP 或 API 服务)。";
         } else if (errorStr.includes('404') || errorStr.includes('not found')) {
-             errorMessage = "模型未找到 (404)。\n\n当前 Key 可能不支持 'gemini-2.5-flash' 模型，或该模型在你所在的区域不可用。";
+             friendlyMessage = "模型未找到 (404)。\n该 Key 可能不支持 gemini-2.5-flash 或区域受限。";
         } else if (errorStr.includes('429')) {
-             errorMessage = "请求过于频繁 (Rate Limit)，请稍作休息再试。";
-        } else if (errorStr.includes('fetch') || errorStr.includes('network')) {
-             errorMessage = "网络请求失败，请检查网络连接。";
+             friendlyMessage = "请求过于频繁 (Rate Limit)，请稍后再试。";
         }
+        
+        // Append Raw Error for Debugging
+        const debugMessage = `${friendlyMessage}\n\n[调试信息]: ${rawMessage}`;
 
         setMessages(prev => [...prev, { 
             id: Date.now().toString(), 
             role: 'model', 
-            text: errorMessage,
+            text: debugMessage,
             isError: true
         }]);
     } finally {
@@ -166,14 +182,19 @@ const ChatBot: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
             {messages.map((msg) => (
                 <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm whitespace-pre-wrap ${
+                    <div className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm whitespace-pre-wrap break-words ${
                         msg.role === 'user' 
                         ? 'bg-indigo-600 text-white rounded-tr-none' 
                         : (msg.isError 
-                            ? 'bg-red-50 text-red-600 border border-red-200 rounded-tl-none flex items-start gap-2' 
+                            ? 'bg-red-50 text-red-600 border border-red-200 rounded-tl-none flex flex-col gap-1' 
                             : 'bg-white text-slate-700 border border-slate-200 rounded-tl-none')
                     }`}>
-                        {msg.isError && <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />}
+                        {msg.isError && (
+                          <div className="flex items-center gap-1 font-bold border-b border-red-100 pb-1 mb-1">
+                             <AlertCircle className="w-4 h-4" /> 
+                             <span>出错了</span>
+                          </div>
+                        )}
                         {msg.text}
                     </div>
                 </div>
