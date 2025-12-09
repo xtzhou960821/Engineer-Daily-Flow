@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Sparkles, Loader2, AlertCircle, Settings } from 'lucide-react';
+import { MessageCircle, X, Send, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
 
 interface Message {
@@ -30,34 +30,38 @@ const ChatBot: React.FC = () => {
 
   // Helper to safely get API Key from various sources
   const getApiKey = (): string | undefined => {
-    // 1. Try Vite standard (import.meta.env)
+    let key = '';
+
+    // 1. Try Vite standard (import.meta.env) - Recommended for this project structure
     try {
       // @ts-ignore
-      if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
+      if (typeof import.meta !== 'undefined' && import.meta.env) {
         // @ts-ignore
-        return import.meta.env.VITE_API_KEY;
+        key = import.meta.env.VITE_API_KEY || '';
       }
     } catch (e) {}
 
-    // 2. Try process.env (Legacy/Webpack/Node)
-    try {
-      if (typeof process !== 'undefined' && process.env) {
-        // Check for VITE_ prefix first in process.env as well, then fallback
-        return process.env.VITE_API_KEY || process.env.API_KEY;
-      }
-    } catch (e) {}
+    // 2. Try process.env (Legacy/Webpack/Node/System)
+    // This is required by Google GenAI SDK guidelines as the primary source in many environments
+    if (!key) {
+      try {
+        if (typeof process !== 'undefined' && process.env) {
+          key = process.env.VITE_API_KEY || process.env.API_KEY || '';
+        }
+      } catch (e) {}
+    }
     
-    return undefined;
+    return key.trim();
   };
 
   // Initialize Chat Session
   const initChat = () => {
     const apiKey = getApiKey();
-    console.log("Initializing Chat. Key available:", !!apiKey);
+    console.log("Initializing Chat...");
     
-    // 1. Strict Check for API Key existence and format
+    // 1. Check for API Key existence
     if (!apiKey) {
-      const errorMsg = "配置错误: 未检测到 API Key。\n\n请在 Netlify 后台 'Site configuration > Environment variables' 中添加变量 'VITE_API_KEY' (推荐) 或 'API_KEY'。\n\n注意：在 Netlify 中，变量名建议使用 'VITE_API_KEY' 以确保能被前端读取。\n\n修改后请务必重新部署 (Trigger deploy)。";
+      const errorMsg = "配置错误: 未检测到 API Key。\n\n本地开发: 请在项目根目录 .env 文件中添加 'VITE_API_KEY=AIza...'\n\nNetlify: 请在 Environment variables 中添加 'VITE_API_KEY'。\n\n(添加变量后重启服务或重新部署)";
       setConfigError(errorMsg);
       if (!messages.some(m => m.id === 'sys-err-key')) {
           setMessages(prev => [...prev, { id: 'sys-err-key', role: 'model', text: errorMsg, isError: true }]);
@@ -65,16 +69,8 @@ const ChatBot: React.FC = () => {
       return;
     }
 
-    if (!apiKey.startsWith('AIza')) {
-      const errorMsg = "配置错误: API Key 格式看似不正确。\n\nGoogle API Key 通常以 'AIza' 开头。请检查是否复制了多余空格或字符。";
-      setConfigError(errorMsg);
-      if (!messages.some(m => m.id === 'sys-err-fmt')) {
-          setMessages(prev => [...prev, { id: 'sys-err-fmt', role: 'model', text: errorMsg, isError: true }]);
-      }
-      return;
-    }
-
     // 2. Initialize Gemini Client
+    // We removed strict format validation to avoid blocking valid keys that might look different or be proxy keys.
     if (!chatSessionRef.current) {
         try {
             const ai = new GoogleGenAI({ apiKey: apiKey });
@@ -84,15 +80,15 @@ const ChatBot: React.FC = () => {
                     systemInstruction: "You are a helpful assistant for a bridge inspection engineer and software developer. You are concise, professional, and encouraging. Your user has a schedule involving bridge inspection field work and learning software development (API, database). Answer in Chinese."
                 }
             });
-            console.log("Gemini Client Initialized Successfully");
-            setConfigError(null); // Clear error if init succeeds
+            console.log("Gemini Client Initialized");
+            setConfigError(null); 
             
             // Remove error messages if they exist
             setMessages(prev => prev.filter(m => !m.isError));
             
         } catch (error: any) {
             console.error("Failed to initialize AI", error);
-            const errorText = `初始化失败: ${error.message}`;
+            const errorText = `初始化异常: ${error.message}`;
             setConfigError(errorText);
             setMessages(prev => [...prev, { id: 'init-err', role: 'model', text: errorText, isError: true }]);
         }
@@ -101,7 +97,7 @@ const ChatBot: React.FC = () => {
 
   useEffect(() => {
     initChat();
-  }, [isOpen]); // Re-try init when opening chat window
+  }, [isOpen]); 
 
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading || configError) return;
@@ -148,13 +144,13 @@ const ChatBot: React.FC = () => {
 
         // Detailed Error Handling
         if (errorStr.includes('403') || errorStr.includes('permission')) {
-             friendlyMessage = "API 权限不足 (403)。\n\n1. 请检查 Key 是否在 Google Cloud Console 中启用了 'Generative Language API'。\n2. 如果设置了 Key 限制 (Restrictions)，请确保允许了当前网站域名。";
+             friendlyMessage = "API 权限不足 (403)。\n\n1. 请确保 Google Cloud Console 中已启用 'Generative Language API'。\n2. 检查 API Key 是否正确。\n3. 如果设置了 Key 限制，请检查 Referrer。";
         } else if (errorStr.includes('404') || errorStr.includes('not found')) {
-             friendlyMessage = "模型未找到 (404)。\n该 Key 可能不支持 gemini-2.5-flash 或区域受限。";
+             friendlyMessage = "模型不可用 (404)。\n该 API Key 可能无法访问 gemini-2.5-flash。";
+        } else if (errorStr.includes('400') || errorStr.includes('invalid argument')) {
+             friendlyMessage = "请求无效 (400)。\nAPI Key 格式可能错误，或包含了多余字符。";
         } else if (errorStr.includes('429')) {
-             friendlyMessage = "请求过于频繁 (Rate Limit)，请稍后再试。";
-        } else if (errorStr.includes('api key')) {
-             friendlyMessage = "API Key 无效。请检查 Netlify 环境变量是否正确。";
+             friendlyMessage = "请求过于频繁，请稍后再试。";
         }
         
         // Append Raw Error for Debugging
