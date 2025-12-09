@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import { MessageCircle, X, Send, Sparkles, Loader2, AlertCircle, Settings } from 'lucide-react';
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
 
 interface Message {
@@ -18,6 +18,7 @@ const ChatBot: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const chatSessionRef = useRef<Chat | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -31,30 +32,41 @@ const ChatBot: React.FC = () => {
   useEffect(() => {
     const apiKey = process.env.API_KEY;
     
-    // Debug log (Do not log the actual key in production, just existence)
+    // 1. Strict Check for API Key existence and format
     if (!apiKey) {
-      console.warn("API_KEY is missing from process.env");
-    } else {
-      console.log("API_KEY is present");
+      const errorMsg = "配置错误: 未检测到 API Key。\n\n请在 Netlify 后台 'Site configuration > Environment variables' 中添加变量 'API_KEY'。\n\n添加后请务必重新部署 (Trigger deploy)。";
+      setConfigError(errorMsg);
+      setMessages(prev => [...prev, { id: 'sys-err', role: 'model', text: errorMsg, isError: true }]);
+      return;
     }
 
+    if (!apiKey.startsWith('AIza')) {
+      const errorMsg = "配置错误: API Key 格式看似不正确。\n\nGoogle API Key 通常以 'AIza' 开头。请检查是否复制了多余空格或字符。";
+      setConfigError(errorMsg);
+      setMessages(prev => [...prev, { id: 'sys-err', role: 'model', text: errorMsg, isError: true }]);
+      return;
+    }
+
+    // 2. Initialize Gemini Client
     if (!chatSessionRef.current) {
         try {
-            const ai = new GoogleGenAI({ apiKey: apiKey || 'MISSING_KEY' });
+            const ai = new GoogleGenAI({ apiKey: apiKey });
             chatSessionRef.current = ai.chats.create({
                 model: 'gemini-2.5-flash',
                 config: {
                     systemInstruction: "You are a helpful assistant for a bridge inspection engineer and software developer. You are concise, professional, and encouraging. Your user has a schedule involving bridge inspection field work and learning software development (API, database). Answer in Chinese."
                 }
             });
+            console.log("Gemini Client Initialized");
         } catch (error) {
             console.error("Failed to initialize AI", error);
+            setConfigError("初始化 AI 客户端失败");
         }
     }
   }, []);
 
   const handleSend = async () => {
-    if (!inputValue.trim() || isLoading) return;
+    if (!inputValue.trim() || isLoading || configError) return;
 
     const userText = inputValue;
     setInputValue('');
@@ -94,13 +106,13 @@ const ChatBot: React.FC = () => {
         const errorStr = error.toString().toLowerCase();
         
         // Detailed Error Handling
-        if (errorStr.includes('api key') || errorStr.includes('403')) {
-             errorMessage = "API Key 认证失败。请检查 Netlify 环境变量配置，或确保已在 Google Cloud 中启用 'Generative Language API'。推荐使用 Google AI Studio 获取 Key。";
+        if (errorStr.includes('403') || errorStr.includes('permission')) {
+             errorMessage = "API 权限不足 (403)。\n\n原因 1: 如果使用的是 Google Cloud Key，请务必去 GCP 控制台启用 'Generative Language API' 服务。\n\n原因 2: API Key 填写错误。";
         } else if (errorStr.includes('404') || errorStr.includes('not found')) {
-             errorMessage = "模型未找到。可能是当前 API Key 不支持该模型，或者模型名称有误。";
+             errorMessage = "模型未找到 (404)。\n\n当前 Key 可能不支持 'gemini-2.5-flash' 模型，或该模型在你所在的区域不可用。";
         } else if (errorStr.includes('429')) {
              errorMessage = "请求过于频繁 (Rate Limit)，请稍作休息再试。";
-        } else if (errorStr.includes('fetch')) {
+        } else if (errorStr.includes('fetch') || errorStr.includes('network')) {
              errorMessage = "网络请求失败，请检查网络连接。";
         }
 
@@ -143,7 +155,10 @@ const ChatBot: React.FC = () => {
             </div>
             <div>
                 <h3 className="text-white font-bold text-sm">AI 助手</h3>
-                <p className="text-indigo-200 text-xs">Gemini 2.5 Flash</p>
+                <div className="flex items-center gap-1">
+                  <span className={`w-1.5 h-1.5 rounded-full ${configError ? 'bg-red-400' : 'bg-green-400'}`}></span>
+                  <p className="text-indigo-200 text-xs">Gemini 2.5 Flash</p>
+                </div>
             </div>
         </div>
 
@@ -151,7 +166,7 @@ const ChatBot: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
             {messages.map((msg) => (
                 <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm ${
+                    <div className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm whitespace-pre-wrap ${
                         msg.role === 'user' 
                         ? 'bg-indigo-600 text-white rounded-tr-none' 
                         : (msg.isError 
@@ -176,21 +191,21 @@ const ChatBot: React.FC = () => {
 
         {/* Input Area */}
         <div className="p-3 border-t border-slate-100 bg-white rounded-b-2xl">
-            <div className="flex gap-2 items-center bg-slate-100 rounded-full px-4 py-2 border border-transparent focus-within:border-indigo-300 focus-within:bg-white transition-colors">
+            <div className={`flex gap-2 items-center rounded-full px-4 py-2 border transition-colors ${configError ? 'bg-slate-50 border-slate-200' : 'bg-slate-100 border-transparent focus-within:border-indigo-300 focus-within:bg-white'}`}>
                 <input
                     type="text"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={handleKeyPress}
-                    placeholder="问点什么..."
+                    placeholder={configError ? "配置错误，无法发送" : "问点什么..."}
                     className="flex-1 bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-400"
-                    disabled={isLoading}
+                    disabled={isLoading || !!configError}
                 />
                 <button 
                     onClick={handleSend}
-                    disabled={!inputValue.trim() || isLoading}
+                    disabled={!inputValue.trim() || isLoading || !!configError}
                     className={`p-1.5 rounded-full transition-colors ${
-                        inputValue.trim() && !isLoading 
+                        inputValue.trim() && !isLoading && !configError
                         ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
                         : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                     }`}
