@@ -28,9 +28,16 @@ const ChatBot: React.FC = () => {
 
   // Initialize Chat Session
   useEffect(() => {
+    const apiKey = process.env.API_KEY;
+    
+    if (!apiKey) {
+      console.warn("API_KEY environment variable is missing.");
+    }
+
     if (!chatSessionRef.current) {
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            // Even if key is missing, we initialize. The error will catch on send if key is invalid.
+            const ai = new GoogleGenAI({ apiKey: apiKey || 'MISSING_KEY' });
             chatSessionRef.current = ai.chats.create({
                 model: 'gemini-3-pro-preview',
                 config: {
@@ -74,10 +81,21 @@ const ChatBot: React.FC = () => {
                     );
                 }
             }
+        } else {
+             throw new Error("Chat session not initialized");
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Chat error", error);
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "抱歉，我现在无法连接到大脑。请稍后再试。" }]);
+        
+        let errorMessage = "抱歉，连接服务器失败。";
+        
+        // Improve error message for common API key issues
+        const errorStr = error.toString().toLowerCase();
+        if (errorStr.includes('api key') || errorStr.includes('403') || errorStr.includes('400')) {
+             errorMessage = "配置错误：API Key 无效或未设置。请在 Netlify 环境变量中配置 API_KEY。";
+        }
+
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: errorMessage }]);
     } finally {
         setIsLoading(false);
     }
@@ -122,7 +140,7 @@ const ChatBot: React.FC = () => {
                     <div className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm ${
                         msg.role === 'user' 
                         ? 'bg-indigo-600 text-white rounded-tr-none' 
-                        : 'bg-white text-slate-700 border border-slate-200 rounded-tl-none'
+                        : (msg.text.includes('配置错误') ? 'bg-red-50 text-red-600 border border-red-200 rounded-tl-none' : 'bg-white text-slate-700 border border-slate-200 rounded-tl-none')
                     }`}>
                         {msg.text}
                     </div>
