@@ -2,55 +2,46 @@ import React, { useState, useEffect } from 'react';
 import { Target, CheckCircle2, Circle, Pencil, Check, X } from 'lucide-react';
 import { Priority } from '../types';
 
-const STORAGE_KEY = 'engineer-daily-priorities-v1';
+interface Props {
+  items: Priority[];
+  onUpdate: (items: Priority[]) => void;
+}
 
-const INITIAL_PRIORITIES: Priority[] = [
-  { id: 1, text: '桥梁智慧检测现场验收', done: false },
-  { id: 2, text: '无人机平台用户模块开发', done: false },
-  { id: 3, text: 'API 基础学习', done: false },
-];
-
-const TopPriorities: React.FC = () => {
-  const [priorities, setPriorities] = useState<Priority[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : INITIAL_PRIORITIES;
-    } catch {
-      return INITIAL_PRIORITIES;
-    }
-  });
-
+const TopPriorities: React.FC<Props> = ({ items, onUpdate }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedPriorities, setEditedPriorities] = useState<Priority[]>(priorities);
+  const [editedItems, setEditedItems] = useState<Priority[]>(items);
 
+  // Sync edited state when items change externally (e.g. date change)
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(priorities));
-  }, [priorities]);
+    setEditedItems(items);
+  }, [items]);
 
   const togglePriority = (id: number) => {
     if (isEditing) return;
-    setPriorities(prev => prev.map(p => 
+    const newItems = items.map(p => 
       p.id === id ? { ...p, done: !p.done } : p
-    ));
+    );
+    onUpdate(newItems);
   };
 
   const handleEditChange = (id: number, text: string) => {
-    setEditedPriorities(prev => prev.map(p => 
+    setEditedItems(prev => prev.map(p => 
       p.id === id ? { ...p, text } : p
     ));
   };
 
   const saveEdits = () => {
-    setPriorities(editedPriorities);
+    onUpdate(editedItems);
     setIsEditing(false);
   };
 
   const startEditing = () => {
-    setEditedPriorities(priorities);
+    setEditedItems(items);
     setIsEditing(true);
   };
 
   const cancelEditing = () => {
+    setEditedItems(items);
     setIsEditing(false);
   };
 
@@ -84,7 +75,7 @@ const TopPriorities: React.FC = () => {
       </div>
       
       <div className="space-y-3">
-        {(isEditing ? editedPriorities : priorities).map((item) => (
+        {(isEditing ? editedItems : items).map((item) => (
           <div 
             key={item.id}
             onClick={() => togglePriority(item.id)}

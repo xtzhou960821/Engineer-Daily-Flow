@@ -33,3 +33,11 @@ export interface Priority {
   text: string;
   done: boolean;
 }
+
+export interface DailyData {
+  schedule: ScheduleBlock[];
+  priorities: Priority[];
+  lastUpdated: number;
+}
+
+export type HistoryData = Record<string, DailyData>; // Key is YYYY-MM-DD

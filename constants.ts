@@ -1,4 +1,10 @@
-import { ScheduleBlock, ActivityType } from './types';
+import { ScheduleBlock, ActivityType, Priority } from './types';
+
+export const INITIAL_PRIORITIES: Priority[] = [
+  { id: 1, text: '桥梁智慧检测现场验收', done: false },
+  { id: 2, text: '无人机平台用户模块开发', done: false },
+  { id: 3, text: 'API 基础学习', done: false },
+];
 
 export const INITIAL_SCHEDULE: ScheduleBlock[] = [
   {
