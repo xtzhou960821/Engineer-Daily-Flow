@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Sparkles, Loader2 } from 'lucide-react';
+import { MessageCircle, X, Send, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
 
 interface Message {
   id: string;
   role: 'user' | 'model';
   text: string;
+  isError?: boolean;
 }
 
 const ChatBot: React.FC = () => {
@@ -30,16 +31,18 @@ const ChatBot: React.FC = () => {
   useEffect(() => {
     const apiKey = process.env.API_KEY;
     
+    // Debug log (Do not log the actual key in production, just existence)
     if (!apiKey) {
-      console.warn("API_KEY environment variable is missing.");
+      console.warn("API_KEY is missing from process.env");
+    } else {
+      console.log("API_KEY is present");
     }
 
     if (!chatSessionRef.current) {
         try {
-            // Even if key is missing, we initialize. The error will catch on send if key is invalid.
             const ai = new GoogleGenAI({ apiKey: apiKey || 'MISSING_KEY' });
             chatSessionRef.current = ai.chats.create({
-                model: 'gemini-3-pro-preview',
+                model: 'gemini-2.5-flash',
                 config: {
                     systemInstruction: "You are a helpful assistant for a bridge inspection engineer and software developer. You are concise, professional, and encouraging. Your user has a schedule involving bridge inspection field work and learning software development (API, database). Answer in Chinese."
                 }
@@ -62,40 +65,51 @@ const ChatBot: React.FC = () => {
     setIsLoading(true);
 
     try {
-        if (chatSessionRef.current) {
-            // Streaming response
-            const result = await chatSessionRef.current.sendMessageStream({ message: userText });
-            
-            let fullText = '';
-            const modelMsgId = (Date.now() + 1).toString();
-            
-            // Add placeholder for model message
-            setMessages(prev => [...prev, { id: modelMsgId, role: 'model', text: '' }]);
-            
-            for await (const chunk of result) {
-                const c = chunk as GenerateContentResponse;
-                if (c.text) {
-                    fullText += c.text;
-                    setMessages(prev => 
-                        prev.map(msg => msg.id === modelMsgId ? { ...msg, text: fullText } : msg)
-                    );
-                }
-            }
-        } else {
+        if (!chatSessionRef.current) {
              throw new Error("Chat session not initialized");
+        }
+        
+        // Streaming response
+        const result = await chatSessionRef.current.sendMessageStream({ message: userText });
+        
+        let fullText = '';
+        const modelMsgId = (Date.now() + 1).toString();
+        
+        // Add placeholder for model message
+        setMessages(prev => [...prev, { id: modelMsgId, role: 'model', text: '' }]);
+        
+        for await (const chunk of result) {
+            const c = chunk as GenerateContentResponse;
+            if (c.text) {
+                fullText += c.text;
+                setMessages(prev => 
+                    prev.map(msg => msg.id === modelMsgId ? { ...msg, text: fullText } : msg)
+                );
+            }
         }
     } catch (error: any) {
         console.error("Chat error", error);
         
-        let errorMessage = "抱歉，连接服务器失败。";
-        
-        // Improve error message for common API key issues
+        let errorMessage = "连接服务器失败，请稍后再试。";
         const errorStr = error.toString().toLowerCase();
-        if (errorStr.includes('api key') || errorStr.includes('403') || errorStr.includes('400')) {
-             errorMessage = "配置错误：API Key 无效或未设置。请在 Netlify 环境变量中配置 API_KEY。";
+        
+        // Detailed Error Handling
+        if (errorStr.includes('api key') || errorStr.includes('403')) {
+             errorMessage = "API Key 认证失败。请检查 Netlify 环境变量配置，或确保已在 Google Cloud 中启用 'Generative Language API'。推荐使用 Google AI Studio 获取 Key。";
+        } else if (errorStr.includes('404') || errorStr.includes('not found')) {
+             errorMessage = "模型未找到。可能是当前 API Key 不支持该模型，或者模型名称有误。";
+        } else if (errorStr.includes('429')) {
+             errorMessage = "请求过于频繁 (Rate Limit)，请稍作休息再试。";
+        } else if (errorStr.includes('fetch')) {
+             errorMessage = "网络请求失败，请检查网络连接。";
         }
 
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: errorMessage }]);
+        setMessages(prev => [...prev, { 
+            id: Date.now().toString(), 
+            role: 'model', 
+            text: errorMessage,
+            isError: true
+        }]);
     } finally {
         setIsLoading(false);
     }
@@ -129,7 +143,7 @@ const ChatBot: React.FC = () => {
             </div>
             <div>
                 <h3 className="text-white font-bold text-sm">AI 助手</h3>
-                <p className="text-indigo-200 text-xs">Gemini 3.0 Pro</p>
+                <p className="text-indigo-200 text-xs">Gemini 2.5 Flash</p>
             </div>
         </div>
 
@@ -140,8 +154,11 @@ const ChatBot: React.FC = () => {
                     <div className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm ${
                         msg.role === 'user' 
                         ? 'bg-indigo-600 text-white rounded-tr-none' 
-                        : (msg.text.includes('配置错误') ? 'bg-red-50 text-red-600 border border-red-200 rounded-tl-none' : 'bg-white text-slate-700 border border-slate-200 rounded-tl-none')
+                        : (msg.isError 
+                            ? 'bg-red-50 text-red-600 border border-red-200 rounded-tl-none flex items-start gap-2' 
+                            : 'bg-white text-slate-700 border border-slate-200 rounded-tl-none')
                     }`}>
+                        {msg.isError && <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />}
                         {msg.text}
                     </div>
                 </div>
