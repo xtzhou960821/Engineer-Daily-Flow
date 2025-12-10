@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { INITIAL_SCHEDULE, INITIAL_PRIORITIES } from './constants';
 import { ScheduleBlock, Priority, HistoryData, DailyData, ActivityType } from './types';
@@ -5,7 +6,7 @@ import ScheduleCard from './components/ScheduleCard';
 import TopPriorities from './components/TopPriorities';
 import DailyAnalysis from './components/DailyAnalysis';
 import ChatBot from './components/ChatBot';
-import { CalendarDays, Sun, RotateCcw, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Plus } from 'lucide-react';
+import { CalendarDays, Sun, RotateCcw, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Plus, Briefcase } from 'lucide-react';
 
 const HISTORY_STORAGE_KEY = 'engineer-daily-history-v1';
 
@@ -181,27 +182,33 @@ const App: React.FC = () => {
       <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           
-          {/* Left: Date Navigation */}
+          {/* Left: App Title & Date Navigation */}
           <div className="flex items-center gap-3">
             <div 
               onClick={goToToday}
-              className={`p-2 rounded-lg transition-colors cursor-pointer ${isToday ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+              className={`p-2.5 rounded-xl transition-colors cursor-pointer flex-shrink-0 ${isToday ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-white border border-slate-200 text-slate-400 hover:bg-slate-50'}`}
               title="回到今天"
             >
               <Sun className="w-5 h-5" />
             </div>
             
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                 <button onClick={() => navigateDate(-1)} className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-indigo-600 transition-colors">
+            <div className="flex flex-col justify-center">
+              <h1 className="font-extrabold text-slate-900 text-base sm:text-lg leading-tight tracking-tight mb-0.5">
+                桥梁工程师的一天
+              </h1>
+              
+              <div className="flex items-center gap-1">
+                 <button onClick={() => navigateDate(-1)} className="p-0.5 -ml-1 hover:bg-slate-100 rounded text-slate-400 hover:text-indigo-600 transition-colors">
                    <ChevronLeft className="w-4 h-4" />
                  </button>
                  
                  <div className="relative group cursor-pointer" onClick={handleDateClick}>
-                   <h1 className="font-bold text-slate-900 text-sm sm:text-base leading-tight select-none group-hover:text-indigo-600 transition-colors flex items-center gap-1">
-                     {isToday ? '今天' : dateKey}
-                     <CalendarIcon className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" />
-                   </h1>
+                   <div className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1 hover:text-indigo-600 transition-colors">
+                      <CalendarIcon className="w-3 h-3" />
+                      <span>{displayDate}</span> 
+                      {/* Show 'History' indicator if not today */}
+                      {!isToday && <span className="bg-orange-100 text-orange-600 text-[10px] px-1.5 rounded-full">历史</span>}
+                   </div>
                    {/* Hidden Date Input for Native Picker */}
                    <input 
                       ref={dateInputRef}
@@ -212,21 +219,20 @@ const App: React.FC = () => {
                    />
                  </div>
 
-                 <button onClick={() => navigateDate(1)} className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-indigo-600 transition-colors">
+                 <button onClick={() => navigateDate(1)} className="p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-indigo-600 transition-colors">
                    <ChevronRight className="w-4 h-4" />
                  </button>
               </div>
-              <p className="text-xs text-slate-500 font-mono ml-1">{displayDate}</p>
             </div>
           </div>
 
           {/* Right: Progress */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 pl-2">
              <div className="flex flex-col items-end hidden sm:flex">
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">完成度</span>
                 <span className="font-bold text-indigo-600">{progress}%</span>
              </div>
-             <div className="w-10 h-10 sm:w-12 sm:h-12 relative flex items-center justify-center">
+             <div className="w-10 h-10 sm:w-12 sm:h-12 relative flex items-center justify-center flex-shrink-0">
                 <svg className="w-full h-full transform -rotate-90">
                   <circle cx="50%" cy="50%" r="42%" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-slate-100" />
                   <circle cx="50%" cy="50%" r="42%" stroke="currentColor" strokeWidth="4" fill="transparent" strokeDasharray={126} strokeDashoffset={126 - (126 * progress) / 100} className="text-indigo-600 transition-all duration-500 ease-out" />
@@ -244,7 +250,7 @@ const App: React.FC = () => {
           onUpdate={updatePriorities}
         />
 
-        {/* Introduction Quote - changes slightly if looking at history */}
+        {/* Introduction Quote */}
         <div className={`border-l-4 p-4 mb-8 rounded-r-lg transition-colors ${isToday ? 'bg-orange-50 border-orange-400' : 'bg-slate-100 border-slate-300'}`}>
           <p className={`${isToday ? 'text-orange-800' : 'text-slate-600'} text-sm italic`}>
             {isToday 
@@ -299,7 +305,7 @@ const App: React.FC = () => {
         {/* Footer */}
         <footer className="mt-12 text-center text-slate-400 text-xs pb-6">
           <p>持续行动，每日精进</p>
-          <p className="mt-1 font-mono">Build v1.4.0 (Full Edit)</p>
+          <p className="mt-1 font-mono">Build v1.5.0 (Full Features)</p>
         </footer>
 
       </main>
