@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { INITIAL_SCHEDULE, INITIAL_PRIORITIES } from './constants';
 import { ScheduleBlock, Priority, HistoryData, DailyData, ActivityType } from './types';
 import ScheduleCard from './components/ScheduleCard';
@@ -21,7 +21,6 @@ const getFormattedDate = (date: Date): string => {
 const App: React.FC = () => {
   // --- Date State ---
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const dateInputRef = useRef<HTMLInputElement>(null);
   
   // --- Data State ---
   // We load the entire history object.
@@ -137,13 +136,6 @@ const App: React.FC = () => {
     setSelectedDate(new Date());
   };
 
-  const handleDateClick = () => {
-    if (dateInputRef.current) {
-      // Small timeout to ensure UI is ready if needed, mostly for mobile touch feedback
-      setTimeout(() => dateInputRef.current?.showPicker(), 50);
-    }
-  };
-
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.value) {
       setSelectedDate(new Date(e.target.value));
@@ -202,20 +194,20 @@ const App: React.FC = () => {
                    <ChevronLeft className="w-4 h-4" />
                  </button>
                  
-                 <div className="relative group cursor-pointer" onClick={handleDateClick}>
-                   <div className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1 hover:text-indigo-600 transition-colors">
+                 <div className="relative group cursor-pointer">
+                   <div className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1 group-hover:text-indigo-600 transition-colors">
                       <CalendarIcon className="w-3 h-3" />
                       <span>{displayDate}</span> 
                       {/* Show 'History' indicator if not today */}
                       {!isToday && <span className="bg-orange-100 text-orange-600 text-[10px] px-1.5 rounded-full">历史</span>}
                    </div>
-                   {/* Hidden Date Input for Native Picker */}
+                   {/* Hidden Date Input for Native Picker - Overlay Method */}
                    <input 
-                      ref={dateInputRef}
                       type="date" 
-                      className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer -z-10"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                       value={dateKey}
                       onChange={handleDateChange}
+                      title="点击选择日期"
                    />
                  </div>
 
