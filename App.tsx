@@ -143,17 +143,28 @@ const App: React.FC = () => {
     }
   };
   
-  const handleCalendarClick = () => {
-    // Explicitly open picker for browsers like Chrome/Edge that support showPicker()
+  // Robust picker opener for Desktop Chrome/Edge
+  const openDatePicker = () => {
     try {
-      if (dateInputRef.current && 'showPicker' in dateInputRef.current) {
-        // @ts-ignore - TS might not know showPicker yet
-        dateInputRef.current.showPicker();
+      if (dateInputRef.current) {
+        const input = dateInputRef.current;
+        // Check property existence safely without narrowing 'input' to never in the else block
+        // We use cast to any to treat this as a runtime check rather than static type check
+        // which might conclude 'else' is unreachable if HTMLInputElement has showPicker in d.ts
+        if (typeof (input as any).showPicker === 'function') {
+           // @ts-ignore
+           (input as any).showPicker();
+        } else {
+           // Fallback for older browsers or Safari (which usually relies on direct click)
+           input.focus();
+           input.click();
+        }
       }
     } catch (e) {
-      // Fallback: the overlay input usually handles it for Safari/Mobile
+      console.log("Picker open error", e);
     }
   };
+
 
   // --- Progress Calculation ---
   const progress = useMemo(() => {
@@ -202,22 +213,27 @@ const App: React.FC = () => {
                 桥梁工程师的一天
               </h1>
               
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 select-none">
                  <button onClick={() => navigateDate(-1)} className="p-0.5 -ml-1 hover:bg-slate-100 rounded text-slate-400 hover:text-indigo-600 transition-colors">
                    <ChevronLeft className="w-4 h-4" />
                  </button>
                  
+                 {/* 
+                    Date Picker Trigger Area 
+                    - We use a container click handler to force open on Desktop
+                    - We keep the input opacity-0 on top for Mobile Safari
+                 */}
                  <div 
-                    className="relative group cursor-pointer"
-                    onClick={handleCalendarClick}
+                    className="relative group cursor-pointer" 
+                    onClick={openDatePicker}
                  >
-                   <div className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1 group-hover:text-indigo-600 transition-colors">
+                   <div className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1 group-hover:text-indigo-600 transition-colors pointer-events-none">
                       <CalendarIcon className="w-3 h-3" />
                       <span>{displayDate}</span> 
                       {/* Show 'History' indicator if not today */}
                       {!isToday && <span className="bg-orange-100 text-orange-600 text-[10px] px-1.5 rounded-full">历史</span>}
                    </div>
-                   {/* Hidden Date Input for Native Picker - Overlay Method */}
+                   
                    <input 
                       ref={dateInputRef}
                       type="date" 
