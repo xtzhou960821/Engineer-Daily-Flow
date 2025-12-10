@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { INITIAL_SCHEDULE, INITIAL_PRIORITIES } from './constants';
 import { ScheduleBlock, Priority, HistoryData, DailyData, ActivityType } from './types';
 import ScheduleCard from './components/ScheduleCard';
@@ -21,6 +21,7 @@ const getFormattedDate = (date: Date): string => {
 const App: React.FC = () => {
   // --- Date State ---
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const dateInputRef = useRef<HTMLInputElement>(null);
   
   // --- Data State ---
   // We load the entire history object.
@@ -141,6 +142,18 @@ const App: React.FC = () => {
       setSelectedDate(new Date(e.target.value));
     }
   };
+  
+  const handleCalendarClick = () => {
+    // Explicitly open picker for browsers like Chrome/Edge that support showPicker()
+    try {
+      if (dateInputRef.current && 'showPicker' in dateInputRef.current) {
+        // @ts-ignore - TS might not know showPicker yet
+        dateInputRef.current.showPicker();
+      }
+    } catch (e) {
+      // Fallback: the overlay input usually handles it for Safari/Mobile
+    }
+  };
 
   // --- Progress Calculation ---
   const progress = useMemo(() => {
@@ -194,7 +207,10 @@ const App: React.FC = () => {
                    <ChevronLeft className="w-4 h-4" />
                  </button>
                  
-                 <div className="relative group cursor-pointer">
+                 <div 
+                    className="relative group cursor-pointer"
+                    onClick={handleCalendarClick}
+                 >
                    <div className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1 group-hover:text-indigo-600 transition-colors">
                       <CalendarIcon className="w-3 h-3" />
                       <span>{displayDate}</span> 
@@ -203,6 +219,7 @@ const App: React.FC = () => {
                    </div>
                    {/* Hidden Date Input for Native Picker - Overlay Method */}
                    <input 
+                      ref={dateInputRef}
                       type="date" 
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                       value={dateKey}
